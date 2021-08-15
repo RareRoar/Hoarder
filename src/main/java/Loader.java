@@ -119,12 +119,14 @@ public class Loader {
     private static final String accessToken = "329d75c48182e6d83ed7130fbe8b2fd06e33c5b6238" +
             "c6e6d14bfb8ad3f1174bb13f26cada9e1cd03f9d14";
 
-    private static final int pauseMs = 340;
+    private static final int pauseMs = 334;
     private static final int maxPostCount = 100;
 
     // ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS
-    private static final String groupName = "public204617258";
+    private static final String groupName = "enemy_org";
     // ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS
+
+    private static final int threshold = 10000;
 
     public static void main(String[] args) {
 
@@ -167,14 +169,19 @@ public class Loader {
         int globalPostCount = 0;
         int postCount = -1;
         do {
+            if (threshold < suffixIndex) {
+                logger.info("Threshold is reached, stopping.");
+                return;
+            }
             List<WallpostFull> posts;
             try {
                     posts = vk.wall()
-                    .get(actor)
-                    .ownerId(ownerId)
-                    .count(maxPostCount)
-                    .execute().
-                    getItems();
+                            .get(actor)
+                            .ownerId(ownerId)
+                            .offset(globalPostCount)
+                            .count(maxPostCount)
+                            .execute()
+                            .getItems();
             CollectionUtils.filter(posts, PredicateUtils.notNullPredicate());
             }
             catch (ApiException ex) {
