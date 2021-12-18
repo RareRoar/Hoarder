@@ -231,5 +231,76 @@ public class Loader {
         } while (postCount == 100);
 
         logger.info(String.format("Reading is complete. Read %d posts. Saved %d images", globalPostCount, suffixIndex));
+        
+        List<PhotoAlbumFull> albums;
+        Integer albumCount = 1;
+        try {
+            albums = vk.photos().getAlbums(actor).ownerId(ownerId).execute().getItems();
+            Thread.sleep(pauseMs);
+            for (PhotoAlbumFull album : albums) {
+                if (album.getSize() == 0) {
+                    albumCount++;
+                    logger.info("Skipping empty album " + album.getTitle());
+                    continue;
+                }
+                String fixedAlbumTitle = fixFilename(album.getTitle());
+                logger.info("Reading album " + album.getTitle());
+                Integer offset = 0;
+                Integer realCount = 1;
+                do {
+                    List<Photo> photos = vk.photos().
+                            get(actor).
+                            ownerId(ownerId).
+                            albumId(album.getId().toString()).
+                            rev(false).
+                            offset(offset).
+                            count(1000).execute().getItems();
+                    Thread.sleep(pauseMs);
+                    offset = photos.size();
+                    for(Photo photo : photos) {
+                        List<PhotoSizes> photoSizes = photo.getSizes();
+                        PhotoSizes bestPhoto = getBestQualitySize(photoSizes);
+                        URI uri = bestPhoto.getUrl();
+                        File savePhotoDirectory = new File(System.getProperty("user.dir") + String.format("/%s", groupName) + String.format("/%s", fixedAlbumTitle));
+                        if (!savePhotoDirectory.exists()) {
+                            if (!savePhotoDirectory.mkdir()) {
+                                logger.error("Cannot create directory " +
+                                        System.getProperty("user.dir") + String.format("/%s", groupName) + String.format("/%s", fixedAlbumTitle));
+                                logger.error("Shutdown");
+                                return;
+                            }
+                        }
+                        fixedAlbumTitle = fixedAlbumTitle.strip();
+                        saveImage(uri, groupName + "/" + fixedAlbumTitle, fixedAlbumTitle, realCount++);
+
+                    }
+                }
+                while (offset == 0);
+                try (PrintWriter out = new PrintWriter(groupName + "/" + fixedAlbumTitle + "/description.txt")) {
+                    out.println(album.getDescription());
+                } catch (FileNotFoundException e) {
+                    System.out.println("Cannot save description.");
+                }
+                logger.info(String.format("Saved '%s' album.", album.getTitle()));
+                logger.info(String.format("Saved %d/%d", albumCount++, albums.size()));
+
+            }
+        }
+        catch (ApiException ex) {
+            logger.error("API error " + ex.getMessage());
+            logger.error("Shutdown.");
+            return;
+        }
+        catch (ClientException ex) {
+            logger.error("Client error " + ex.getMessage());
+            logger.error("Shutdown.");
+            return;
+        }
+        catch (InterruptedException ex) {
+            logger.error("Interruption: " + ex.getMessage());
+            logger.error("Shutdown.");
+            return;
+        }
+        System.out.println("Finished, darling<3");
     }
 }
