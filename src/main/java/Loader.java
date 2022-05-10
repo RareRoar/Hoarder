@@ -4,6 +4,8 @@ import com.vk.api.sdk.client.actors.UserActor;
 import com.vk.api.sdk.exceptions.ApiException;
 import com.vk.api.sdk.exceptions.ClientException;
 import com.vk.api.sdk.httpclient.HttpTransportClient;
+import com.vk.api.sdk.objects.photos.Photo;
+import com.vk.api.sdk.objects.photos.PhotoAlbumFull;
 import com.vk.api.sdk.objects.photos.PhotoSizes;
 import com.vk.api.sdk.objects.photos.PhotoSizesType;
 import com.vk.api.sdk.objects.wall.WallpostAttachment;
@@ -19,7 +21,9 @@ import org.apache.logging.log4j.Logger;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -28,13 +32,60 @@ import java.util.List;
 
 
 public class Loader {
-
     private static void saveImage(URI uri, String sourceName, int suffixIndex) {
         try {
             String extension = getExtensionFromUrl(uri.toASCIIString());
             BufferedImage image = ImageIO.read(uri.toURL());
             File file = new File(System.getProperty("user.dir") +
                     String.format("/%s/%s_%d.%s", sourceName, sourceName, suffixIndex, extension));
+            ImageIO.write(image, extension, file);
+        }
+        catch (IllegalArgumentException ex) {
+            logger.error("Extension error " + ex.getMessage());
+        }
+        catch (MalformedURLException ex) {
+            logger.error("URI error " + ex.getMessage());
+        }
+        catch (IOException ex) {
+            logger.error("File IO error " + ex.getMessage());
+        }
+    }
+
+    private static void saveImage(URI uri, String sourceName, String albumTitle, int suffixIndex) {
+        try {
+            String extension = getExtensionFromUrl(uri.toASCIIString());
+            BufferedImage image = ImageIO.read(uri.toURL());
+            File file = new File(System.getProperty("user.dir") +
+                    String.format("/%s/%s_%d.%s", sourceName, albumTitle, suffixIndex, extension));
+            ImageIO.write(image, extension, file);
+        }
+        catch (IllegalArgumentException ex) {
+            logger.error("Extension error " + ex.getMessage());
+        }
+        catch (MalformedURLException ex) {
+            logger.error("URI error " + ex.getMessage());
+        }
+        catch (IOException ex) {
+            logger.error("File IO error " + ex.getMessage());
+        }
+    }
+
+    private static void saveImage(URI uri, String sourceName, int suffixIndex, String postText) {
+        try {
+            postText = postText.replaceAll("\n", " ")
+                    .replaceAll("\\?", "#QMARK#")
+                    .replaceAll(":", "#COLON#")
+                    .replaceAll("<", "#LANGLE#")
+                    .replaceAll(">", "#RANGLE#")
+                    .replaceAll("\\\\", "#BACKSLASH#")
+                    .replaceAll("\\|", "#BAR#");
+            if (postText.length() > 50) {
+                postText = "ignomon";
+            }
+            String extension = getExtensionFromUrl(uri.toASCIIString());
+            BufferedImage image = ImageIO.read(uri.toURL());
+            File file = new File(System.getProperty("user.dir") +
+                    String.format("/%s/%s_%d -- %s.%s", sourceName, sourceName, suffixIndex, postText, extension));
             ImageIO.write(image, extension, file);
         }
         catch (IllegalArgumentException ex) {
@@ -103,7 +154,7 @@ public class Loader {
 
     private static final Logger logger = LogManager.getLogger(Loader.class);
 
-    private static final ArrayList<String> imageFormats = new ArrayList<>() {
+    private static final ArrayList<String> imageFormats = new ArrayList<String>() {
         {
             add("jpg");
             add("jpeg");
@@ -116,17 +167,16 @@ public class Loader {
     };
 
     private static final int userId = 152748880;
-    private static final String accessToken = "329d75c48182e6d83ed7130fbe8b2fd06e33c5b6238" +
-            "c6e6d14bfb8ad3f1174bb13f26cada9e1cd03f9d14";
+    private static final String accessToken = "5cf63f935cf63f935cf63f93f65c8ed1d955cf65cf63f933de3551d8d2ab5e6dd397cd3";
 
     private static final int pauseMs = 334;
     private static final int maxPostCount = 100;
 
     // ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS
-    private static final String groupName = "enemy_org";
+    private static final String groupName = "abruption408";
     // ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS ARGS
 
-    private static final int threshold = 10000;
+    private static final int threshold = Integer.MAX_VALUE;
 
     public static void main(String[] args) {
 
@@ -208,8 +258,8 @@ public class Loader {
                             PhotoSizes bestPhoto = getBestQualitySize(attachment.getPhoto().getSizes());
                             URI uri = bestPhoto.getUrl();
                             logger.debug(String.format("Got #%d image URI.", suffixIndex));
-
-                            saveImage(uri, groupName, suffixIndex++);
+                            //saveImage(uri, groupName, suffixIndex++);
+                            saveImage(uri, groupName, suffixIndex++, item.getText());
                             logger.debug(String.format("Saved #%d image.", suffixIndex));
                         }
                     }
@@ -231,7 +281,7 @@ public class Loader {
         } while (postCount == 100);
 
         logger.info(String.format("Reading is complete. Read %d posts. Saved %d images", globalPostCount, suffixIndex));
-        
+        /*
         List<PhotoAlbumFull> albums;
         Integer albumCount = 1;
         try {
@@ -243,7 +293,6 @@ public class Loader {
                     logger.info("Skipping empty album " + album.getTitle());
                     continue;
                 }
-                String fixedAlbumTitle = fixFilename(album.getTitle());
                 logger.info("Reading album " + album.getTitle());
                 Integer offset = 0;
                 Integer realCount = 1;
@@ -261,22 +310,22 @@ public class Loader {
                         List<PhotoSizes> photoSizes = photo.getSizes();
                         PhotoSizes bestPhoto = getBestQualitySize(photoSizes);
                         URI uri = bestPhoto.getUrl();
-                        File savePhotoDirectory = new File(System.getProperty("user.dir") + String.format("/%s", groupName) + String.format("/%s", fixedAlbumTitle));
+                        File savePhotoDirectory = new File(System.getProperty("user.dir") + String.format("/%s", groupName) + String.format("/%s", album.getTitle()));
                         if (!savePhotoDirectory.exists()) {
                             if (!savePhotoDirectory.mkdir()) {
                                 logger.error("Cannot create directory " +
-                                        System.getProperty("user.dir") + String.format("/%s", groupName) + String.format("/%s", fixedAlbumTitle));
+                                        System.getProperty("user.dir") + String.format("/%s", groupName) + String.format("/%s", album.getTitle()));
                                 logger.error("Shutdown");
                                 return;
                             }
                         }
-                        fixedAlbumTitle = fixedAlbumTitle.strip();
-                        saveImage(uri, groupName + "/" + fixedAlbumTitle, fixedAlbumTitle, realCount++);
+                        String albumTitle = album.getTitle();
+                        saveImage(uri, groupName + "/" + albumTitle, albumTitle, realCount++);
 
                     }
                 }
                 while (offset == 0);
-                try (PrintWriter out = new PrintWriter(groupName + "/" + fixedAlbumTitle + "/description.txt")) {
+                try (PrintWriter out = new PrintWriter(groupName + "/" + album.getTitle() + "/description.txt")) {
                     out.println(album.getDescription());
                 } catch (FileNotFoundException e) {
                     System.out.println("Cannot save description.");
@@ -302,5 +351,7 @@ public class Loader {
             return;
         }
         System.out.println("Finished, darling<3");
+
+         */
     }
 }
